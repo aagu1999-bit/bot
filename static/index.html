@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTF Trading Bot — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-primary: #0a0b0e;
+    --bg-card: #12141a;
+    --bg-card-hover: #181b23;
+    --bg-input: #1a1d26;
+    --border: #1f2330;
+    --border-active: #2d3348;
+    --text-primary: #e8eaed;
+    --text-secondary: #8b8fa3;
+    --text-muted: #565a6e;
+    --green: #00d4a1;
+    --green-bg: rgba(0,212,161,0.08);
+    --green-border: rgba(0,212,161,0.2);
+    --red: #ff4d6a;
+    --red-bg: rgba(255,77,106,0.08);
+    --red-border: rgba(255,77,106,0.2);
+    --blue: #4d8dff;
+    --blue-bg: rgba(77,141,255,0.08);
+    --yellow: #ffc44d;
+    --yellow-bg: rgba(255,196,77,0.08);
+    --yellow-border: rgba(255,196,77,0.2);
+    --purple: #a855f7;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ─── HEADER ─── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-primary);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+  }
+
+  .header-left { display: flex; align-items: center; gap: 16px; }
+
+  .logo {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--green), var(--blue));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--bg-primary);
+  }
+
+  .header-title { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .status-badge.online {
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid var(--green-border);
+  }
+
+  .status-badge.offline {
+    background: var(--red-bg);
+    color: var(--red);
+    border: 1px solid var(--red-border);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-start {
+    background: var(--green);
+    color: var(--bg-primary);
+  }
+  .btn-start:hover { background: #00e8b0; transform: translateY(-1px); }
+
+  .btn-stop {
+    background: var(--red);
+    color: white;
+  }
+  .btn-stop:hover { background: #ff6680; transform: translateY(-1px); }
+
+  .btn-secondary {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--border-active); background: var(--bg-card-hover); }
+
+  /* ─── TABS ─── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-primary);
+  }
+
+  .tab {
+    padding: 16px 24px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .tab:hover { color: var(--text-secondary); }
+  .tab.active { color: var(--text-primary); border-bottom-color: var(--green); }
+
+  /* ─── MAIN LAYOUT ─── */
+  .main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  /* ─── CARDS ─── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.15s;
+  }
+
+  .card:hover { border-color: var(--border-active); }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .card-value {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+
+  .card-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* ─── MTF SCANNER ─── */
+  .scanner-row {
+    display: grid;
+    grid-template-columns: 120px repeat(5, 1fr);
+    gap: 8px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .scanner-row:last-child { border-bottom: none; }
+
+  .scanner-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .scanner-instrument {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .signal-chip {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.3px;
+  }
+
+  .signal-long {
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid var(--green-border);
+  }
+
+  .signal-short {
+    background: var(--red-bg);
+    color: var(--red);
+    border: 1px solid var(--red-border);
+  }
+
+  .signal-neutral {
+    background: var(--bg-input);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .signal-active {
+    background: var(--yellow-bg);
+    color: var(--yellow);
+    border: 1px solid var(--yellow-border);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  /* ─── TRADES TABLE ─── */
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  .pnl-positive { color: var(--green); font-weight: 600; }
+  .pnl-negative { color: var(--red); font-weight: 600; }
+
+  .side-buy {
+    color: var(--green);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  .side-sell {
+    color: var(--red);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ─── KEY LEVELS ─── */
+  .level-section { margin-bottom: 24px; }
+
+  .level-instrument-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .level-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .level-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    width: 100%;
+    margin-bottom: 4px;
+  }
+
+  .level-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .level-tag.support {
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid var(--green-border);
+  }
+
+  .level-tag.resistance {
+    background: var(--red-bg);
+    color: var(--red);
+    border: 1px solid var(--red-border);
+  }
+
+  .level-tag .remove {
+    cursor: pointer;
+    opacity: 0.5;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .level-tag .remove:hover { opacity: 1; }
+
+  .add-level-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+  }
+
+  input, select {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 8px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input:focus, select:focus { border-color: var(--blue); }
+
+  input::placeholder { color: var(--text-muted); }
+
+  /* ─── CONFIG PANEL ─── */
+  .config-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .config-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .config-field input, .config-field select {
+    width: 100%;
+  }
+
+  /* ─── SECTION TITLES ─── */
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ─── HIDDEN SECTIONS ─── */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ─── LOG ─── */
+  .log-container {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+
+  .log-entry { color: var(--text-secondary); }
+  .log-entry .time { color: var(--text-muted); margin-right: 8px; }
+  .log-entry.trade { color: var(--green); }
+  .log-entry.error { color: var(--red); }
+  .log-entry.warn { color: var(--yellow); }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 900px) {
+    .grid-3 { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .config-grid { grid-template-columns: 1fr; }
+    .scanner-row { grid-template-columns: 80px repeat(5, 1fr); font-size: 11px; }
+    .main { padding: 16px; }
+    .header { padding: 16px; }
+    .tabs { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── HEADER ─── -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">BB</div>
+    <div>
+      <div class="header-title">MTF Trading Bot</div>
+      <div class="header-subtitle">BB + EMA 9 · Multi-Timeframe · Indices</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-badge offline" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">OFFLINE</span>
+    </div>
+    <button class="btn btn-start" id="startBtn" onclick="startBot()">▶ Start</button>
+    <button class="btn btn-stop" id="stopBtn" onclick="stopBot()" style="display:none;">■ Stop</button>
+  </div>
+</div>
+
+<!-- ─── TABS ─── -->
+<div class="tabs">
+  <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" data-tab="scanner" onclick="switchTab('scanner')">MTF Scanner</div>
+  <div class="tab" data-tab="trades" onclick="switchTab('trades')">Trades</div>
+  <div class="tab" data-tab="levels" onclick="switchTab('levels')">Key Levels</div>
+  <div class="tab" data-tab="config" onclick="switchTab('config')">Settings</div>
+</div>
+
+<!-- ─── MAIN CONTENT ─── -->
+<div class="main">
+
+  <!-- OVERVIEW TAB -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Trades Today</span></div>
+        <div class="card-value" id="tradesToday">0<span style="font-size:16px;color:var(--text-muted);font-weight:400;"> / 5</span></div>
+        <div class="card-label">Maximum daily trades</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Session</span></div>
+        <div class="card-value" id="sessionStatus" style="font-size:20px;">—</div>
+        <div class="card-label">London + NY · 3AM – 4PM ET</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Active Positions</span></div>
+        <div class="card-value" id="activePositions">0</div>
+        <div class="card-label">Currently open trades</div>
+      </div>
+    </div>
+
+    <!-- Quick Scanner -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header"><span class="card-title">MTF Scanner — Quick View</span></div>
+      <div class="scanner-row">
+        <div class="scanner-header">Instrument</div>
+        <div class="scanner-header">4H Bias</div>
+        <div class="scanner-header">30m Confirm</div>
+        <div class="scanner-header">5m Trigger</div>
+        <div class="scanner-header">1m Entry</div>
+        <div class="scanner-header">Status</div>
+      </div>
+      <div id="scannerQuick">
+        <div class="scanner-row">
+          <div class="scanner-instrument">NAS100</div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">IDLE</span></div>
+        </div>
+        <div class="scanner-row">
+          <div class="scanner-instrument">US30</div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">IDLE</span></div>
+        </div>
+        <div class="scanner-row">
+          <div class="scanner-instrument">SPX500</div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">—</span></div>
+          <div><span class="signal-chip signal-neutral">IDLE</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Activity Log</span></div>
+      <div class="log-container" id="logContainer">
+        <div class="log-entry"><span class="time mono">--:--:--</span>Bot initialized. Waiting for start command.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCANNER TAB -->
+  <div class="tab-content" id="tab-scanner">
+    <div class="section-title">Multi-Timeframe Analysis</div>
+    <div class="card" style="margin-bottom:24px;">
+      <p style="color:var(--text-secondary);font-size:13px;line-height:1.6;margin-bottom:16px;">
+        The scanner checks all timeframes every 60 seconds. The strategy chain:
+        <strong>4H bias</strong> → <strong>30m confirmation</strong> → <strong>5m consolidation breakout</strong> → <strong>1m entry confirmation</strong>.
+        A trade is executed only when all four stages align.
+      </p>
+      <div class="scanner-row">
+        <div class="scanner-header">Instrument</div>
+        <div class="scanner-header">4H Bias</div>
+        <div class="scanner-header">30m Confirm</div>
+        <div class="scanner-header">5m Trigger</div>
+        <div class="scanner-header">1m Entry</div>
+        <div class="scanner-header">Status</div>
+      </div>
+      <div id="scannerFull"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Strategy Rules</span></div>
+      <div style="color:var(--text-secondary);font-size:13px;line-height:1.8;">
+        <p><strong style="color:var(--text-primary);">4H Bias:</strong> Price within 50 pips of key level OR 150+ pips beyond BB (NAS100)</p>
+        <p><strong style="color:var(--text-primary);">30m Confirm:</strong> Candle respecting VWAP / BB bands / EMA 9 + bullish/bearish close</p>
+        <p><strong style="color:var(--text-primary);">5m Trigger:</strong> Break above/below 4-candle consolidation range</p>
+        <p><strong style="color:var(--text-primary);">1m Entry:</strong> Candle close beyond breakout level → EXECUTE</p>
+        <p style="margin-top:8px;"><strong style="color:var(--text-primary);">Exit:</strong> TP1 (50%) at 30m middle BB · TP2 (50%) at 30m opposite BB or VWAP · SL: $20 fixed</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRADES TAB -->
+  <div class="tab-content" id="tab-trades">
+    <div class="section-title">Active Trades</div>
+    <div class="card" style="margin-bottom:24px;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Instrument</th>
+              <th>Side</th>
+              <th>Entry</th>
+              <th>Lot Size</th>
+              <th>Stop Loss</th>
+              <th>TP1</th>
+              <th>TP2</th>
+              <th>Status</th>
+              <th>P&L</th>
+            </tr>
+          </thead>
+          <tbody id="activeTradesBody">
+            <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px;">No active trades</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-title">Trade History</div>
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Instrument</th>
+              <th>Side</th>
+              <th>Entry</th>
+              <th>Exit</th>
+              <th>Lots</th>
+              <th>P&L</th>
+            </tr>
+          </thead>
+          <tbody id="tradeHistoryBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No trade history yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- KEY LEVELS TAB -->
+  <div class="tab-content" id="tab-levels">
+    <div class="section-title">Key Support & Resistance Levels</div>
+    <p style="color:var(--text-secondary);font-size:13px;margin-bottom:24px;">
+      Add your manually drawn key levels from the 4H and 1H timeframes (dating back to August 2024).
+      The bot uses these to determine 4H directional bias.
+    </p>
+    <div id="keyLevelsContainer"></div>
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div class="tab-content" id="tab-config">
+    <div class="section-title">TradeLocker Connection</div>
+    <div class="card" style="margin-bottom:24px;">
+      <div class="config-grid">
+        <div class="config-field">
+          <label>Environment</label>
+          <select id="cfgEnv">
+            <option value="https://demo.tradelocker.com">Demo</option>
+            <option value="https://live.tradelocker.com">Live</option>
+          </select>
+        </div>
+        <div class="config-field">
+          <label>Server Name</label>
+          <input type="text" id="cfgServer" placeholder="e.g. SERVER_NAME">
+        </div>
+        <div class="config-field">
+          <label>Email / Username</label>
+          <input type="text" id="cfgUsername" placeholder="your@email.com">
+        </div>
+        <div class="config-field">
+          <label>Password</label>
+          <input type="password" id="cfgPassword" placeholder="••••••••">
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="saveConfig()">Save Connection Settings</button>
+    </div>
+
+    <div class="section-title">Instrument Settings</div>
+    <div class="card" style="margin-bottom:24px;">
+      <div id="instrumentSettings"></div>
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="saveConfig()">Save Instrument Settings</button>
+    </div>
+
+    <div class="section-title">Bot Settings</div>
+    <div class="card">
+      <div class="config-grid">
+        <div class="config-field">
+          <label>Max Trades Per Day</label>
+          <input type="number" id="cfgMaxTrades" value="5" min="1" max="20">
+        </div>
+        <div class="config-field">
+          <label>Stop Loss ($)</label>
+          <input type="number" id="cfgStopLoss" value="20" min="1">
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="saveConfig()">Save Bot Settings</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let dashboardData = null;
+let pollInterval = null;
+
+const INSTRUMENTS = ["NAS100", "US30", "SPX500"];
+
+// ─── TAB SWITCHING ───────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+// ─── API CALLS ───────────────────────────────────────────────────────────────
+const API = '';  // Same origin — change if hosted separately
+
+async function fetchDashboard() {
+  try {
+    const res = await fetch(`${API}/api/dashboard`);
+    dashboardData = await res.json();
+    updateUI();
+  } catch (e) {
+    console.error('Dashboard fetch error:', e);
+  }
+}
+
+async function startBot() {
+  try {
+    const res = await fetch(`${API}/api/bot/start`, { method: 'POST' });
+    const data = await res.json();
+    addLog('Bot started', 'trade');
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'flex';
+    fetchDashboard();
+  } catch (e) {
+    addLog('Failed to start bot: ' + e.message, 'error');
+  }
+}
+
+async function stopBot() {
+  try {
+    const res = await fetch(`${API}/api/bot/stop`, { method: 'POST' });
+    addLog('Bot stopped', 'warn');
+    document.getElementById('startBtn').style.display = 'flex';
+    document.getElementById('stopBtn').style.display = 'none';
+    fetchDashboard();
+  } catch (e) {
+    addLog('Failed to stop bot: ' + e.message, 'error');
+  }
+}
+
+async function saveConfig() {
+  const config = {
+    environment: document.getElementById('cfgEnv').value,
+    username: document.getElementById('cfgUsername').value,
+    password: document.getElementById('cfgPassword').value,
+    server: document.getElementById('cfgServer').value,
+    max_trades_per_day: parseInt(document.getElementById('cfgMaxTrades').value),
+    instruments: {},
+  };
+
+  INSTRUMENTS.forEach(inst => {
+    const lotEl = document.getElementById(`cfg-lot-${inst}`);
+    const bbEl = document.getElementById(`cfg-bb-${inst}`);
+    const klEl = document.getElementById(`cfg-kl-${inst}`);
+    if (lotEl) {
+      config.instruments[inst] = {
+        lot_size: parseFloat(lotEl.value),
+        bb_extension_pips: parseFloat(bbEl?.value || 150),
+        key_level_proximity_pips: parseFloat(klEl?.value || 50),
+        stop_loss_dollars: parseFloat(document.getElementById('cfgStopLoss')?.value || 20),
+      };
+    }
+  });
+
+  try {
+    await fetch(`${API}/api/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    addLog('Configuration saved', 'trade');
+  } catch (e) {
+    addLog('Failed to save config: ' + e.message, 'error');
+  }
+}
+
+async function addKeyLevel(instrument, type, price) {
+  try {
+    await fetch(`${API}/api/key-levels/${instrument}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, price }),
+    });
+    fetchDashboard();
+    addLog(`Added ${type} level ${price} for ${instrument}`, 'trade');
+  } catch (e) {
+    addLog('Failed to add level: ' + e.message, 'error');
+  }
+}
+
+async function removeKeyLevel(instrument, type, index) {
+  try {
+    await fetch(`${API}/api/key-levels/${instrument}/${type}/${index}`, { method: 'DELETE' });
+    fetchDashboard();
+  } catch (e) {
+    addLog('Failed to remove level: ' + e.message, 'error');
+  }
+}
+
+// ─── UI UPDATES ──────────────────────────────────────────────────────────────
+function updateUI() {
+  if (!dashboardData) return;
+  const d = dashboardData;
+
+  // Status
+  const badge = document.getElementById('statusBadge');
+  const statusText = document.getElementById('statusText');
+  if (d.running) {
+    badge.className = 'status-badge online';
+    statusText.textContent = 'RUNNING';
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'flex';
+  } else {
+    badge.className = 'status-badge offline';
+    statusText.textContent = 'OFFLINE';
+    document.getElementById('startBtn').style.display = 'flex';
+    document.getElementById('stopBtn').style.display = 'none';
+  }
+
+  // Overview cards
+  const ts = d.trade_status || {};
+  document.getElementById('tradesToday').innerHTML =
+    `${ts.trades_today || 0}<span style="font-size:16px;color:var(--text-muted);font-weight:400;"> / ${ts.max_trades || 5}</span>`;
+  document.getElementById('sessionStatus').textContent = d.session_active ? '● ACTIVE' : '○ CLOSED';
+  document.getElementById('sessionStatus').style.color = d.session_active ? 'var(--green)' : 'var(--text-muted)';
+  document.getElementById('activePositions').textContent = (ts.active_trades || []).length;
+
+  // Scanner
+  updateScanner('scannerQuick');
+  updateScanner('scannerFull');
+
+  // Active trades
+  updateActiveTrades(ts.active_trades || []);
+
+  // Trade history
+  updateTradeHistory(ts.trade_history || []);
+
+  // Key levels
+  updateKeyLevels(d.key_levels || {});
+
+  // Config
+  updateConfigUI(d.config || {});
+}
+
+function updateScanner(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || !dashboardData) return;
+
+  const scans = dashboardData.scan_results || {};
+  let html = '';
+
+  INSTRUMENTS.forEach(inst => {
+    const s = scans[inst] || {};
+    html += `<div class="scanner-row">
+      <div class="scanner-instrument">${inst}</div>
+      <div>${signalChip(s['4h_bias'] || '—')}</div>
+      <div>${signalChip(s['30m_confirm'] || '—')}</div>
+      <div>${signalChip(s['5m_trigger'] || '—')}</div>
+      <div>${signalChip(s['1m_confirm'] || '—')}</div>
+      <div>${statusChip(s)}</div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function signalChip(value) {
+  if (!value || value === '—' || value === 'NO DATA') return `<span class="signal-chip signal-neutral">${value || '—'}</span>`;
+  if (value === 'LONG') return `<span class="signal-chip signal-long">LONG</span>`;
+  if (value === 'SHORT') return `<span class="signal-chip signal-short">SHORT</span>`;
+  if (value === 'YES') return `<span class="signal-chip signal-long">✓</span>`;
+  if (value === 'NO') return `<span class="signal-chip signal-neutral">✗</span>`;
+  if (value === 'NEUTRAL') return `<span class="signal-chip signal-neutral">—</span>`;
+  if (value.startsWith('BREAKOUT')) return `<span class="signal-chip signal-active">${value}</span>`;
+  if (value === 'ENTRY!') return `<span class="signal-chip signal-active">ENTRY!</span>`;
+  return `<span class="signal-chip signal-neutral">${value}</span>`;
+}
+
+function statusChip(scan) {
+  if (scan['1m_confirm'] === 'ENTRY!') return `<span class="signal-chip signal-active">EXECUTING</span>`;
+  if (scan['5m_trigger'] && scan['5m_trigger'] !== 'NO' && scan['5m_trigger'] !== '—') return `<span class="signal-chip signal-active">WATCHING</span>`;
+  if (scan['4h_bias'] === 'LONG' || scan['4h_bias'] === 'SHORT') return `<span class="signal-chip signal-neutral">SCANNING</span>`;
+  return `<span class="signal-chip signal-neutral">IDLE</span>`;
+}
+
+function updateActiveTrades(trades) {
+  const tbody = document.getElementById('activeTradesBody');
+  if (trades.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px;">No active trades</td></tr>';
+    return;
+  }
+  tbody.innerHTML = trades.map(t => `<tr>
+    <td class="mono">${t.instrument}</td>
+    <td class="${t.side === 'buy' ? 'side-buy' : 'side-sell'}">${t.side}</td>
+    <td class="mono">${parseFloat(t.entry_price).toFixed(2)}</td>
+    <td class="mono">${t.lot_size}</td>
+    <td class="mono">${parseFloat(t.stop_loss_price).toFixed(2)}</td>
+    <td class="mono">${parseFloat(t.tp1_price).toFixed(2)}</td>
+    <td class="mono">${parseFloat(t.tp2_price).toFixed(2)}</td>
+    <td><span class="signal-chip signal-active">${t.status}</span></td>
+    <td class="mono ${t.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${t.pnl >= 0 ? '+' : ''}$${parseFloat(t.pnl).toFixed(2)}</td>
+  </tr>`).join('');
+}
+
+function updateTradeHistory(trades) {
+  const tbody = document.getElementById('tradeHistoryBody');
+  if (trades.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No trade history yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = trades.slice().reverse().map(t => `<tr>
+    <td class="mono" style="font-size:11px;">${t.entry_time ? new Date(t.entry_time).toLocaleString() : '—'}</td>
+    <td class="mono">${t.instrument}</td>
+    <td class="${t.side === 'buy' ? 'side-buy' : 'side-sell'}">${t.side}</td>
+    <td class="mono">${parseFloat(t.entry_price).toFixed(2)}</td>
+    <td class="mono">—</td>
+    <td class="mono">${t.lot_size}</td>
+    <td class="mono ${t.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${t.pnl >= 0 ? '+' : ''}$${parseFloat(t.pnl).toFixed(2)}</td>
+  </tr>`).join('');
+}
+
+function updateKeyLevels(levels) {
+  const container = document.getElementById('keyLevelsContainer');
+  let html = '';
+
+  INSTRUMENTS.forEach(inst => {
+    const l = levels[inst] || { support: [], resistance: [] };
+    html += `<div class="card level-section">
+      <div class="level-instrument-title">${inst}</div>
+
+      <div class="level-group-label" style="color:var(--green);">Support Levels</div>
+      <div class="level-group">
+        ${l.support.length ? l.support.map((p, i) => `
+          <span class="level-tag support mono">
+            ${parseFloat(p).toFixed(1)}
+            <span class="remove" onclick="removeKeyLevel('${inst}','support',${i})">×</span>
+          </span>`).join('') : '<span style="color:var(--text-muted);font-size:12px;">None set</span>'}
+      </div>
+
+      <div class="level-group-label" style="color:var(--red);">Resistance Levels</div>
+      <div class="level-group">
+        ${l.resistance.length ? l.resistance.map((p, i) => `
+          <span class="level-tag resistance mono">
+            ${parseFloat(p).toFixed(1)}
+            <span class="remove" onclick="removeKeyLevel('${inst}','resistance',${i})">×</span>
+          </span>`).join('') : '<span style="color:var(--text-muted);font-size:12px;">None set</span>'}
+      </div>
+
+      <div class="add-level-row">
+        <select id="level-type-${inst}" style="width:120px;">
+          <option value="support">Support</option>
+          <option value="resistance">Resistance</option>
+        </select>
+        <input type="number" id="level-price-${inst}" placeholder="Price level" step="0.1" style="width:160px;">
+        <button class="btn btn-secondary" onclick="handleAddLevel('${inst}')">+ Add</button>
+      </div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function handleAddLevel(inst) {
+  const type = document.getElementById(`level-type-${inst}`).value;
+  const price = parseFloat(document.getElementById(`level-price-${inst}`).value);
+  if (!isNaN(price) && price > 0) {
+    addKeyLevel(inst, type, price);
+    document.getElementById(`level-price-${inst}`).value = '';
+  }
+}
+
+function updateConfigUI(config) {
+  if (!config) return;
+
+  // Instrument settings
+  const container = document.getElementById('instrumentSettings');
+  if (container && config.instruments) {
+    let html = '';
+    Object.entries(config.instruments).forEach(([name, icfg]) => {
+      html += `<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);">
+        <div style="font-weight:600;margin-bottom:12px;">${name}</div>
+        <div class="config-grid">
+          <div class="config-field">
+            <label>Lot Size</label>
+            <input type="number" id="cfg-lot-${name}" value="${icfg.lot_size || 0.01}" step="0.01" min="0.01">
+          </div>
+          <div class="config-field">
+            <label>BB Extension (pips)</label>
+            <input type="number" id="cfg-bb-${name}" value="${icfg.bb_extension_pips || 150}" step="1">
+          </div>
+          <div class="config-field">
+            <label>Key Level Proximity (pips)</label>
+            <input type="number" id="cfg-kl-${name}" value="${icfg.key_level_proximity_pips || 50}" step="1">
+          </div>
+        </div>
+      </div>`;
+    });
+    container.innerHTML = html;
+  }
+}
+
+// ─── LOGGING ─────────────────────────────────────────────────────────────────
+function addLog(message, type = '') {
+  const container = document.getElementById('logContainer');
+  const now = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.innerHTML = `<span class="time mono">${now}</span>${message}`;
+  container.appendChild(entry);
+  container.scrollTop = container.scrollHeight;
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+async function init() {
+  await fetchDashboard();
+
+  // Load config into form
+  try {
+    const res = await fetch(`${API}/api/config`);
+    const cfg = await res.json();
+    document.getElementById('cfgEnv').value = cfg.environment || 'https://demo.tradelocker.com';
+    document.getElementById('cfgUsername').value = cfg.username || '';
+    document.getElementById('cfgServer').value = cfg.server || '';
+    document.getElementById('cfgMaxTrades').value = cfg.max_trades_per_day || 5;
+  } catch (e) {}
+
+  // Poll every 5 seconds
+  pollInterval = setInterval(fetchDashboard, 5000);
+}
+
+init();
+</script>
+</body>
+</html>
