@@ -85,6 +85,8 @@ def index():
 def dashboard():
     """Return full dashboard data."""
     if bot:
+        # Refresh balance on every poll so the UI stays current (UI polls every 5s)
+        bot.trade_manager.refresh_account_balance()
         return jsonify(bot.get_dashboard_data())
     return jsonify({
         "running": False,
