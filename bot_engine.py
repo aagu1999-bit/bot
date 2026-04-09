@@ -36,8 +36,10 @@ class BotConfig:
     password: str = ""
     server: str = ""
     max_trades_per_day: int = 5
-    session_start_hour_et: int = 3   # 3 AM ET (London open)
-    session_end_hour_et: int = 16    # 4 PM ET (NY close)
+    # Legacy fields — session window is now fixed to 23H active (off 3–4 AM ET)
+    # and is not driven by these values. Kept for config compatibility.
+    session_start_hour_et: int = 3
+    session_end_hour_et: int = 16
     instruments: dict = field(default_factory=lambda: {
         "NAS100": InstrumentConfig(
             symbol="NAS100",
@@ -489,6 +491,9 @@ class TradingBot:
         """Main loop — scans every 60 seconds."""
         while self.running:
             try:
+                # Always refresh balance each cycle regardless of session/trade limits
+                self.trade_manager.refresh_account_balance()
+
                 if not self._is_in_session():
                     logger.info("Outside trading session — sleeping 60s")
                     time.sleep(60)
@@ -498,8 +503,6 @@ class TradingBot:
                     logger.info("Max trades reached for today — sleeping 300s")
                     time.sleep(300)
                     continue
-
-                self.trade_manager.refresh_account_balance()
 
                 for instrument in self.config.instruments:
                     self._scan_instrument(instrument)
