@@ -1,0 +1,27 @@
+{
+  "environment": "https://demo.tradelocker.com",
+  "username": "aagu1990@gmail.com",
+  "password": "Kooker123.",
+  "server": "GATESFX",
+  "max_trades_per_day": 5,
+  "instruments": {
+    "NAS100": {
+      "lot_size": 0.01,
+      "bb_extension_pips": 150,
+      "key_level_proximity_pips": 50,
+      "stop_loss_dollars": 20
+    },
+    "US30": {
+      "lot_size": 0.01,
+      "bb_extension_pips": 150,
+      "key_level_proximity_pips": 50,
+      "stop_loss_dollars": 20
+    },
+    "SPX500": {
+      "lot_size": 0.01,
+      "bb_extension_pips": 150,
+      "key_level_proximity_pips": 50,
+      "stop_loss_dollars": 20
+    }
+  }
+}
