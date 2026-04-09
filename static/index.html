@@ -178,6 +178,13 @@
     margin-bottom: 24px;
   }
 
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
   .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -462,14 +469,23 @@
   .log-entry.warn { color: var(--yellow); }
 
   /* ─── RESPONSIVE ─── */
+  @media (max-width: 1100px) {
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  }
+
   @media (max-width: 900px) {
     .grid-3 { grid-template-columns: 1fr; }
+    .grid-4 { grid-template-columns: 1fr 1fr; }
     .grid-2 { grid-template-columns: 1fr; }
     .config-grid { grid-template-columns: 1fr; }
     .scanner-row { grid-template-columns: 80px repeat(5, 1fr); font-size: 11px; }
     .main { padding: 16px; }
     .header { padding: 16px; }
     .tabs { padding: 0 16px; }
+  }
+
+  @media (max-width: 600px) {
+    .grid-4 { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -508,7 +524,12 @@
 
   <!-- OVERVIEW TAB -->
   <div class="tab-content active" id="tab-overview">
-    <div class="grid-3">
+    <div class="grid-4">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Account Balance</span></div>
+        <div class="card-value mono" id="accountBalance" style="font-size:22px;">—</div>
+        <div class="card-label" id="accountBalanceLabel">Connect to view balance</div>
+      </div>
       <div class="card">
         <div class="card-header"><span class="card-title">Trades Today</span></div>
         <div class="card-value" id="tradesToday">0<span style="font-size:16px;color:var(--text-muted);font-weight:400;"> / 5</span></div>
@@ -517,7 +538,7 @@
       <div class="card">
         <div class="card-header"><span class="card-title">Session</span></div>
         <div class="card-value" id="sessionStatus" style="font-size:20px;">—</div>
-        <div class="card-label">London + NY · 3AM – 4PM ET</div>
+        <div class="card-label">23H Active · Off 3–4AM ET</div>
       </div>
       <div class="card">
         <div class="card-header"><span class="card-title">Active Positions</span></div>
@@ -851,9 +872,23 @@ function updateUI() {
 
   // Overview cards
   const ts = d.trade_status || {};
+
+  // Account balance
+  const balEl = document.getElementById('accountBalance');
+  const balLabel = document.getElementById('accountBalanceLabel');
+  if (ts.account_balance != null) {
+    balEl.textContent = '$' + parseFloat(ts.account_balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    balEl.style.color = 'var(--green)';
+    balLabel.textContent = 'Live account equity';
+  } else {
+    balEl.textContent = '—';
+    balEl.style.color = 'var(--text-muted)';
+    balLabel.textContent = ts.connected ? 'Balance unavailable' : 'Connect to view balance';
+  }
+
   document.getElementById('tradesToday').innerHTML =
     `${ts.trades_today || 0}<span style="font-size:16px;color:var(--text-muted);font-weight:400;"> / ${ts.max_trades || 5}</span>`;
-  document.getElementById('sessionStatus').textContent = d.session_active ? '● ACTIVE' : '○ CLOSED';
+  document.getElementById('sessionStatus').textContent = d.session_active ? '● OPEN' : '○ CLOSED';
   document.getElementById('sessionStatus').style.color = d.session_active ? 'var(--green)' : 'var(--text-muted)';
   document.getElementById('activePositions').textContent = (ts.active_trades || []).length;
 

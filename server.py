@@ -90,11 +90,11 @@ def dashboard():
         "running": False,
         "session_active": False,
         "scan_results": {},
-        "trade_status": {"connected": False, "trades_today": 0, "max_trades": bot_config.max_trades_per_day, "active_trades": [], "trade_history": []},
+        "trade_status": {"connected": False, "trades_today": 0, "max_trades": bot_config.max_trades_per_day, "active_trades": [], "trade_history": [], "account_balance": None},
         "config": {
             "instruments": {k: {"symbol": v.symbol, "lot_size": v.lot_size} for k, v in bot_config.instruments.items()},
             "max_trades_per_day": bot_config.max_trades_per_day,
-            "session": f"{bot_config.session_start_hour_et}:00 - {bot_config.session_end_hour_et}:00 ET",
+            "session": "23H Active · Off 3–4AM ET",
         },
         "key_levels": bot_config.key_levels,
     })

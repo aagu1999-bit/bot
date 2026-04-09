@@ -289,6 +289,7 @@ class TradeManager:
         self.trade_history: list[Trade] = []
         self.connected = False
         self.instrument_ids: dict = {}
+        self.account_balance: Optional[float] = None
 
     def connect(self) -> bool:
         """Connect to TradeLocker API."""
@@ -309,7 +310,16 @@ class TradeManager:
                 except Exception:
                     logger.warning(f"Could not resolve instrument: {name}")
             self.connected = True
-            logger.info("Connected to TradeLocker API (demo)")
+            logger.info("Connected to TradeLocker API")
+            # Fetch initial account balance
+            try:
+                state = self.tl.get_account_state()
+                balance_val = state.get("balance") or state.get("equity") or state.get("Balance") or state.get("Equity")
+                if balance_val is not None:
+                    self.account_balance = float(balance_val)
+                    logger.info(f"Account balance: ${self.account_balance:,.2f}")
+            except Exception as be:
+                logger.warning(f"Could not fetch account balance: {be}")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to TradeLocker: {e}")
@@ -409,6 +419,7 @@ class TradeManager:
             "max_trades": self.config.max_trades_per_day,
             "active_trades": [asdict(t) for t in self.trades_today if t.status in ("active", "partial")],
             "trade_history": [asdict(t) for t in self.trade_history[-50:]],
+            "account_balance": self.account_balance,
         }
 
 
@@ -446,11 +457,15 @@ class TradingBot:
         logger.info("Bot stopped")
 
     def _is_in_session(self) -> bool:
-        """Check if current time is within London+NY session (ET)."""
+        """Check if current time is within the tradable session.
+        Active 24 hours (3 AM–4 PM ET London+NY, 4 PM–3 AM ET overnight/Asia).
+        Off only 3 AM–4 AM ET for daily reset.
+        """
         now_utc = datetime.now(timezone.utc)
-        # ET = UTC-4 (EDT) or UTC-5 (EST) — simplified to UTC-4 for now
+        # ET = UTC-4 (EDT) — simplified; swap to UTC-5 in winter if needed
         et_hour = (now_utc.hour - 4) % 24
-        return self.config.session_start_hour_et <= et_hour < self.config.session_end_hour_et
+        # Off-window: 3 AM to 4 AM ET only
+        return not (3 <= et_hour < 4)
 
     def _run_loop(self):
         """Main loop — scans every 60 seconds."""
@@ -574,7 +589,7 @@ class TradingBot:
             "config": {
                 "instruments": {k: asdict(v) for k, v in self.config.instruments.items()},
                 "max_trades_per_day": self.config.max_trades_per_day,
-                "session": f"{self.config.session_start_hour_et}:00 - {self.config.session_end_hour_et}:00 ET",
+                "session": "23H Active · Off 3–4AM ET",
             },
             "key_levels": self.config.key_levels,
         }
