@@ -491,9 +491,6 @@ class TradingBot:
         """Main loop — scans every 60 seconds."""
         while self.running:
             try:
-                # Always refresh balance each cycle regardless of session/trade limits
-                self.trade_manager.refresh_account_balance()
-
                 if not self._is_in_session():
                     logger.info("Outside trading session — sleeping 60s")
                     time.sleep(60)
