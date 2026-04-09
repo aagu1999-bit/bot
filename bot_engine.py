@@ -411,6 +411,21 @@ class TradeManager:
         else:
             return entry_price + stop_pips
 
+    def refresh_account_balance(self) -> None:
+        """Fetch the latest account balance from TradeLocker and update self.account_balance."""
+        if not self.connected or self.tl is None:
+            return
+        try:
+            state = self.tl.get_account_state()
+            balance_val = (
+                state.get("balance") or state.get("equity")
+                or state.get("Balance") or state.get("Equity")
+            )
+            if balance_val is not None:
+                self.account_balance = float(balance_val)
+        except Exception as be:
+            logger.warning(f"Could not refresh account balance: {be}")
+
     def get_status(self) -> dict:
         """Return current bot status for the dashboard."""
         return {
@@ -458,8 +473,8 @@ class TradingBot:
 
     def _is_in_session(self) -> bool:
         """Check if current time is within the tradable session.
-        Active 24 hours (3 AM–4 PM ET London+NY, 4 PM–3 AM ET overnight/Asia).
-        Off only 3 AM–4 AM ET for daily reset.
+        Active 23 hours per day: London+NY (3 AM–4 PM ET) + overnight/Asia (4 PM–3 AM ET).
+        Off only during 3 AM–4 AM ET (daily reset window).
         """
         now_utc = datetime.now(timezone.utc)
         # ET = UTC-4 (EDT) — simplified; swap to UTC-5 in winter if needed
@@ -480,6 +495,8 @@ class TradingBot:
                     logger.info("Max trades reached for today — sleeping 300s")
                     time.sleep(300)
                     continue
+
+                self.trade_manager.refresh_account_balance()
 
                 for instrument in self.config.instruments:
                     self._scan_instrument(instrument)
