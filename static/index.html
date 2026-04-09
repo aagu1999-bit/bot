@@ -876,7 +876,7 @@ function updateUI() {
   // Account balance
   const balEl = document.getElementById('accountBalance');
   const balLabel = document.getElementById('accountBalanceLabel');
-  if (ts.account_balance != null) {
+  if (ts.connected && ts.account_balance != null) {
     balEl.textContent = '$' + parseFloat(ts.account_balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     balEl.style.color = 'var(--green)';
     balLabel.textContent = 'Live account equity';
