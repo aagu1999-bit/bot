@@ -314,7 +314,10 @@ class TradeManager:
             # Fetch initial account balance
             try:
                 state = self.tl.get_account_state()
-                balance_val = state.get("balance") or state.get("equity") or state.get("Balance") or state.get("Equity")
+                balance_val = next(
+                    (state[k] for k in ("balance", "equity", "Balance", "Equity") if k in state and state[k] is not None),
+                    None
+                )
                 if balance_val is not None:
                     self.account_balance = float(balance_val)
                     logger.info(f"Account balance: ${self.account_balance:,.2f}")
@@ -417,9 +420,9 @@ class TradeManager:
             return
         try:
             state = self.tl.get_account_state()
-            balance_val = (
-                state.get("balance") or state.get("equity")
-                or state.get("Balance") or state.get("Equity")
+            balance_val = next(
+                (state[k] for k in ("balance", "equity", "Balance", "Equity") if k in state and state[k] is not None),
+                None
             )
             if balance_val is not None:
                 self.account_balance = float(balance_val)
