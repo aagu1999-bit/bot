@@ -65,11 +65,20 @@ class BotConfig:
             stop_loss_dollars=20.0,
             pip_value_per_lot=0.10,
         ),
+        "BTCUSD": InstrumentConfig(
+            symbol="BTCUSD",
+            lot_size=0.001,         # 0.001 BTC per trade
+            bb_extension_pips=500.0,  # $500 beyond BB for overextension
+            key_level_proximity_pips=200.0,  # within $200 of key level
+            stop_loss_dollars=20.0,
+            pip_value_per_lot=1.0,  # $1 per $1 move per 1 BTC lot
+        ),
     })
     key_levels: dict = field(default_factory=lambda: {
         "NAS100": {"support": [], "resistance": []},
         "US30": {"support": [], "resistance": []},
         "SPX500": {"support": [], "resistance": []},
+        "BTCUSD": {"support": [], "resistance": []},
     })
 
 
