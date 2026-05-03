@@ -1,8 +1,5 @@
 {
-  "environment": "https://live.tradelocker.com",
-  "username": "aagu1990@gmail.com",
-  "password": "Kooker123.",
-  "server": "GATESFX",
+  "environment": "https://demo.tradelocker.com",
   "max_trades_per_day": 5,
   "instruments": {
     "NAS100": {
@@ -21,6 +18,12 @@
       "lot_size": 0.01,
       "bb_extension_pips": 150,
       "key_level_proximity_pips": 50,
+      "stop_loss_dollars": 20
+    },
+    "BTCUSD": {
+      "lot_size": 0.001,
+      "bb_extension_pips": 500,
+      "key_level_proximity_pips": 200,
       "stop_loss_dollars": 20
     }
   }

@@ -699,19 +699,19 @@
           </select>
         </div>
         <div class="config-field">
-          <label>Server Name</label>
-          <input type="text" id="cfgServer" placeholder="e.g. SERVER_NAME">
+          <label>Server Name (read-only — set via TL_SERVER env var)</label>
+          <input type="text" id="cfgServer" readonly>
         </div>
         <div class="config-field">
-          <label>Email / Username</label>
-          <input type="text" id="cfgUsername" placeholder="your@email.com">
+          <label>Email / Username (read-only — set via TL_USERNAME env var)</label>
+          <input type="text" id="cfgUsername" readonly>
         </div>
-        <div class="config-field">
+        <div class="config-field" style="opacity:0.6;">
           <label>Password</label>
-          <input type="password" id="cfgPassword" placeholder="••••••••">
+          <input type="password" value="set via TL_PASSWORD env var" readonly>
         </div>
       </div>
-      <button class="btn btn-secondary" style="margin-top:16px;" onclick="saveConfig()">Save Connection Settings</button>
+      <button class="btn btn-secondary" style="margin-top:16px;" onclick="saveConfig()">Save Settings</button>
     </div>
 
     <div class="section-title">Instrument Settings</div>
@@ -756,9 +756,29 @@ function switchTab(tab) {
 // ─── API CALLS ───────────────────────────────────────────────────────────────
 const API = '';  // Same origin — change if hosted separately
 
+function getApiKey() {
+  let k = localStorage.getItem('dashboard_api_key');
+  while (!k) {
+    k = window.prompt('Enter dashboard API key (DASHBOARD_API_KEY env var):');
+    if (k) localStorage.setItem('dashboard_api_key', k);
+  }
+  return k;
+}
+
+async function apiFetch(path, opts = {}) {
+  const headers = { ...(opts.headers || {}), 'X-API-Key': getApiKey() };
+  const res = await fetch(`${API}${path}`, { ...opts, headers });
+  if (res.status === 401) {
+    localStorage.removeItem('dashboard_api_key');
+    alert('Invalid API key. Please reload and try again.');
+    throw new Error('Unauthorized');
+  }
+  return res;
+}
+
 async function fetchDashboard() {
   try {
-    const res = await fetch(`${API}/api/dashboard`);
+    const res = await apiFetch('/api/dashboard');
     dashboardData = await res.json();
     updateUI();
   } catch (e) {
@@ -768,7 +788,7 @@ async function fetchDashboard() {
 
 async function startBot() {
   try {
-    const res = await fetch(`${API}/api/bot/start`, { method: 'POST' });
+    const res = await apiFetch(`/api/bot/start`, { method: 'POST' });
     const data = await res.json();
     addLog('Bot started', 'trade');
     document.getElementById('startBtn').style.display = 'none';
@@ -781,7 +801,7 @@ async function startBot() {
 
 async function stopBot() {
   try {
-    const res = await fetch(`${API}/api/bot/stop`, { method: 'POST' });
+    const res = await apiFetch(`/api/bot/stop`, { method: 'POST' });
     addLog('Bot stopped', 'warn');
     document.getElementById('startBtn').style.display = 'flex';
     document.getElementById('stopBtn').style.display = 'none';
@@ -794,9 +814,6 @@ async function stopBot() {
 async function saveConfig() {
   const config = {
     environment: document.getElementById('cfgEnv').value,
-    username: document.getElementById('cfgUsername').value,
-    password: document.getElementById('cfgPassword').value,
-    server: document.getElementById('cfgServer').value,
     max_trades_per_day: parseInt(document.getElementById('cfgMaxTrades').value),
     instruments: {},
   };
@@ -816,7 +833,7 @@ async function saveConfig() {
   });
 
   try {
-    await fetch(`${API}/api/config`, {
+    await apiFetch(`/api/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
@@ -829,7 +846,7 @@ async function saveConfig() {
 
 async function addKeyLevel(instrument, type, price) {
   try {
-    await fetch(`${API}/api/key-levels/${instrument}`, {
+    await apiFetch(`/api/key-levels/${instrument}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, price }),
@@ -843,7 +860,7 @@ async function addKeyLevel(instrument, type, price) {
 
 async function removeKeyLevel(instrument, type, index) {
   try {
-    await fetch(`${API}/api/key-levels/${instrument}/${type}/${index}`, { method: 'DELETE' });
+    await apiFetch(`/api/key-levels/${instrument}/${type}/${index}`, { method: 'DELETE' });
     fetchDashboard();
   } catch (e) {
     addLog('Failed to remove level: ' + e.message, 'error');
@@ -1083,11 +1100,11 @@ async function init() {
 
   // Load config into form
   try {
-    const res = await fetch(`${API}/api/config`);
+    const res = await apiFetch(`/api/config`);
     const cfg = await res.json();
     document.getElementById('cfgEnv').value = cfg.environment || 'https://demo.tradelocker.com';
-    document.getElementById('cfgUsername').value = cfg.username || '';
-    document.getElementById('cfgServer').value = cfg.server || '';
+    const u = document.getElementById('cfgUsername'); if (u) u.value = cfg.username || '';
+    const s = document.getElementById('cfgServer'); if (s) s.value = cfg.server || '';
     document.getElementById('cfgMaxTrades').value = cfg.max_trades_per_day || 5;
   } catch (e) {}
 

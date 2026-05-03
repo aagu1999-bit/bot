@@ -4,6 +4,7 @@ Flask Web Server — Dashboard API + Bot Control
 
 import os
 import json
+import hmac
 import threading
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -19,6 +20,22 @@ bot: TradingBot = None
 bot_thread: threading.Thread = None
 KEY_LEVELS_FILE = "key_levels.json"
 CONFIG_FILE = "bot_config.json"
+DASHBOARD_API_KEY = os.environ.get("DASHBOARD_API_KEY", "")
+
+
+# ─── AUTH ─────────────────────────────────────────────────────────────────────
+
+@app.before_request
+def require_api_key():
+    """Gate every /api/* route behind the X-API-Key header (constant-time compare)."""
+    if not request.path.startswith("/api/"):
+        return None
+    if not DASHBOARD_API_KEY:
+        return jsonify({"error": "Server misconfigured: DASHBOARD_API_KEY env var not set"}), 503
+    provided = request.headers.get("X-API-Key", "")
+    if not hmac.compare_digest(provided, DASHBOARD_API_KEY):
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
 
 
 def load_key_levels():
@@ -34,15 +51,24 @@ def save_key_levels():
         json.dump(bot_config.key_levels, f, indent=2)
 
 
+def load_credentials_from_env():
+    """Source broker credentials exclusively from environment variables."""
+    bot_config.username = os.environ.get("TL_USERNAME", "")
+    bot_config.password = os.environ.get("TL_PASSWORD", "")
+    bot_config.server = os.environ.get("TL_SERVER", "")
+    if not (bot_config.username and bot_config.password and bot_config.server):
+        print(
+            "WARNING: TL_USERNAME / TL_PASSWORD / TL_SERVER not all set. "
+            "Bot will fail to authenticate until these env vars are provided."
+        )
+
+
 def load_config():
-    """Load bot config from disk."""
+    """Load non-secret bot config from disk. Credentials come from env vars only."""
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
             data = json.load(f)
             bot_config.environment = data.get("environment", bot_config.environment)
-            bot_config.username = data.get("username", "")
-            bot_config.password = data.get("password", "")
-            bot_config.server = data.get("server", "")
             bot_config.max_trades_per_day = data.get("max_trades_per_day", 5)
             for name, icfg in data.get("instruments", {}).items():
                 if name in bot_config.instruments:
@@ -53,12 +79,9 @@ def load_config():
 
 
 def save_config():
-    """Persist config to disk (excluding password in plaintext for production — use env vars)."""
+    """Persist non-secret config to disk. Credentials are never written here."""
     data = {
         "environment": bot_config.environment,
-        "username": bot_config.username,
-        "password": bot_config.password,  # In production, use env vars instead
-        "server": bot_config.server,
         "max_trades_per_day": bot_config.max_trades_per_day,
         "instruments": {
             name: {
@@ -150,14 +173,11 @@ def get_config():
 @app.route("/api/config", methods=["POST"])
 def update_config():
     data = request.json
+    # Reject any attempt to set credentials over the API — they live in env vars only.
+    if any(k in data for k in ("username", "password", "server")):
+        return jsonify({"error": "Credentials must be set via TL_USERNAME / TL_PASSWORD / TL_SERVER env vars, not the API"}), 400
     if "environment" in data:
         bot_config.environment = data["environment"]
-    if "username" in data:
-        bot_config.username = data["username"]
-    if "password" in data:
-        bot_config.password = data["password"]
-    if "server" in data:
-        bot_config.server = data["server"]
     if "max_trades_per_day" in data:
         bot_config.max_trades_per_day = int(data["max_trades_per_day"])
     if "instruments" in data:
@@ -226,13 +246,15 @@ def delete_key_level(instrument, level_type, index):
 # ─── STARTUP ──────────────────────────────────────────────────────────────────
 
 load_config()
+load_credentials_from_env()
 load_key_levels()
 
-if __name__ == "__main__":
-    # Use environment variables for credentials in production
-    bot_config.username = os.environ.get("TL_USERNAME", bot_config.username)
-    bot_config.password = os.environ.get("TL_PASSWORD", bot_config.password)
-    bot_config.server = os.environ.get("TL_SERVER", bot_config.server)
+if not DASHBOARD_API_KEY:
+    print(
+        "WARNING: DASHBOARD_API_KEY env var not set. All /api/* routes will return 503 "
+        "until you set one. Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    )
 
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
