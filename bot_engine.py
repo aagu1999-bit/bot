@@ -4,6 +4,7 @@ Instruments: NAS100, US30, SPX500
 Strategy: 4H bias → 30m confirm → 5m trigger → 1m execute
 """
 
+import os
 import time
 import json
 import logging
@@ -11,7 +12,15 @@ import numpy as np
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass, field, asdict
 from typing import Optional
+
+try:
+    from zoneinfo import ZoneInfo  # py3.9+
+except ImportError:  # pragma: no cover
+    from backports.zoneinfo import ZoneInfo  # type: ignore
+
 from tradelocker import TLAPI
+
+ET = ZoneInfo("America/New_York")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("TradingBot")
@@ -30,16 +39,31 @@ class InstrumentConfig:
 
 
 @dataclass
+class StrategyConfig:
+    """Strategy-level magic numbers — formerly hardcoded throughout SignalEngine."""
+    ema_period: int = 9
+    bb_period: int = 20
+    bb_std_dev: float = 2.0
+    confirmation_proximity_pips: float = 10.0  # 30m respect-of-level proximity
+    consolidation_window: int = 4  # 5m consolidation candles before breakout
+    scan_interval_seconds: int = 60
+    # Off-window in ET (24h clock); inclusive start, exclusive end. Default: 3–4 AM ET.
+    session_off_start_hour_et: int = 3
+    session_off_end_hour_et: int = 4
+    # Order fill verification
+    fill_poll_seconds: float = 2.0
+    fill_timeout_seconds: float = 30.0
+
+
+@dataclass
 class BotConfig:
     environment: str = "https://demo.tradelocker.com"
     username: str = ""
     password: str = ""
     server: str = ""
     max_trades_per_day: int = 5
-    # Legacy fields — session window is now fixed to 23H active (off 3–4 AM ET)
-    # and is not driven by these values. Kept for config compatibility.
-    session_start_hour_et: int = 3
-    session_end_hour_et: int = 16
+    strategy: StrategyConfig = field(default_factory=StrategyConfig)
+    state_file: str = "state.json"
     instruments: dict = field(default_factory=lambda: {
         "NAS100": InstrumentConfig(
             symbol="NAS100",
@@ -135,9 +159,11 @@ class TimeframeData:
     bb_lower: np.ndarray = None
     vwap: np.ndarray = None
 
-    def compute_indicators(self):
-        self.ema9 = calc_ema(self.closes, 9)
-        self.bb_upper, self.bb_middle, self.bb_lower = calc_bollinger_bands(self.closes, 20, 2.0)
+    def compute_indicators(self, strategy: "StrategyConfig"):
+        self.ema9 = calc_ema(self.closes, strategy.ema_period)
+        self.bb_upper, self.bb_middle, self.bb_lower = calc_bollinger_bands(
+            self.closes, strategy.bb_period, strategy.bb_std_dev
+        )
         if len(self.volumes) > 0 and np.sum(self.volumes) > 0:
             self.vwap = calc_vwap(self.highs, self.lows, self.closes, self.volumes)
         else:
@@ -204,7 +230,7 @@ class SignalEngine:
         prev_close = tf.closes[-2] if len(tf.closes) > 1 else price
         candle_low = tf.lows[-1]
         candle_high = tf.highs[-1]
-        proximity = 10.0  # pips
+        proximity = self.config.strategy.confirmation_proximity_pips
 
         # Check if candle is respecting any key indicator level
         reference_levels = [
@@ -236,12 +262,13 @@ class SignalEngine:
         Checks if price breaks above (LONG) or below (SHORT) the 4-candle consolidation range.
         Returns the breakout level if triggered, else None.
         """
-        if len(tf.closes) < 5:
+        window = self.config.strategy.consolidation_window
+        if len(tf.closes) < window + 1:
             return None
 
-        # Last 4 candles before the current one define the consolidation range
-        consol_highs = tf.highs[-5:-1]
-        consol_lows = tf.lows[-5:-1]
+        # Last `window` candles before the current one define the consolidation range
+        consol_highs = tf.highs[-(window + 1):-1]
+        consol_lows = tf.lows[-(window + 1):-1]
         range_high = np.max(consol_highs)
         range_low = np.min(consol_lows)
 
@@ -301,6 +328,62 @@ class TradeManager:
         self.connected = False
         self.instrument_ids: dict = {}
         self.account_balance: Optional[float] = None
+        self._last_reset_date_et: str = self._today_et()
+        self._load_state()
+
+    # ─── STATE PERSISTENCE ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _today_et() -> str:
+        return datetime.now(ET).date().isoformat()
+
+    def _load_state(self) -> None:
+        """Load persisted trades from disk so a crash/restart doesn't lose tracking."""
+        path = self.config.state_file
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            self._last_reset_date_et = data.get("last_reset_date_et", self._today_et())
+            self.trades_today = [Trade(**t) for t in data.get("trades_today", [])]
+            self.trade_history = [Trade(**t) for t in data.get("trade_history", [])]
+            open_count = sum(1 for t in self.trades_today if t.status in ("active", "partial", "pending"))
+            if open_count:
+                logger.warning(
+                    "Loaded %d open trade(s) from state.json — reconcile against broker before relying on them",
+                    open_count,
+                )
+            else:
+                logger.info("Loaded %d historical trades from state.json", len(self.trade_history))
+        except Exception as e:
+            logger.error(f"Failed to load state: {e}")
+
+    def _persist(self) -> None:
+        """Write current trade state to disk atomically."""
+        path = self.config.state_file
+        tmp = path + ".tmp"
+        try:
+            with open(tmp, "w") as f:
+                json.dump({
+                    "last_reset_date_et": self._last_reset_date_et,
+                    "trades_today": [asdict(t) for t in self.trades_today],
+                    "trade_history": [asdict(t) for t in self.trade_history],
+                }, f, indent=2)
+            os.replace(tmp, path)
+        except Exception as e:
+            logger.error(f"Failed to persist state: {e}")
+
+    def maybe_roll_day(self) -> None:
+        """Move yesterday's trades into history once the ET date changes."""
+        today = self._today_et()
+        if today != self._last_reset_date_et:
+            logger.info("New trading day (ET %s) — rolling %d trades into history",
+                        today, len(self.trades_today))
+            self.trade_history.extend(self.trades_today)
+            self.trades_today = []
+            self._last_reset_date_et = today
+            self._persist()
 
     def connect(self) -> bool:
         """Connect to TradeLocker API."""
@@ -363,7 +446,7 @@ class TradeManager:
             volumes = np.array(data["v"], dtype=float) if "v" in data else np.ones_like(closes)
 
             tf = TimeframeData(closes=closes, highs=highs, lows=lows, volumes=volumes)
-            tf.compute_indicators()
+            tf.compute_indicators(self.config.strategy)
             return tf
         except Exception as e:
             logger.error(f"Error fetching candles for {instrument} {resolution}: {e}")
@@ -371,7 +454,9 @@ class TradeManager:
 
     def execute_trade(self, instrument: str, side: str, lot_size: float,
                       stop_loss: float, tp1: float, tp2: float) -> Optional[Trade]:
-        """Place a market order via TradeLocker."""
+        """Place a market order via TradeLocker, then verify the fill before
+        recording the trade. Rejected/cancelled orders are dropped; partial
+        fills are recorded with status='partial'."""
         if not self.connected:
             return None
 
@@ -389,31 +474,130 @@ class TradeManager:
                 side=side,
                 type_="market",
                 stop_loss=stop_loss,
-                take_profit=tp1,  # Set TP1 as initial take-profit
+                take_profit=tp1,
             )
 
-            if order_id:
-                trade = Trade(
-                    instrument=instrument,
-                    side=side,
-                    entry_price=latest_price,
-                    lot_size=lot_size,
-                    stop_loss_price=stop_loss,
-                    tp1_price=tp1,
-                    tp2_price=tp2,
-                    order_id=str(order_id),
-                    status="active",
-                    entry_time=datetime.now(timezone.utc).isoformat(),
-                )
-                self.trades_today.append(trade)
-                logger.info(f"EXECUTED {side.upper()} {instrument} @ {latest_price:.2f} | SL: {stop_loss:.2f} | TP1: {tp1:.2f} | TP2: {tp2:.2f}")
-                return trade
-            else:
-                logger.error(f"Order creation failed for {instrument}")
+            if not order_id:
+                logger.error(f"Order creation failed for {instrument} — broker returned no order id")
                 return None
+
+            # Verify fill before trusting the order succeeded.
+            verdict = self._verify_fill(order_id, expected_qty=lot_size)
+            if verdict["status"] == "rejected":
+                logger.error(f"Order {order_id} REJECTED for {instrument}: {verdict.get('reason', 'unknown')}")
+                return None
+            if verdict["status"] == "unknown":
+                logger.error(
+                    f"Order {order_id} for {instrument} did not confirm fill within %ds — "
+                    "NOT recording trade. Reconcile manually with broker.",
+                    int(self.config.strategy.fill_timeout_seconds),
+                )
+                return None
+
+            fill_price = verdict.get("fill_price") or latest_price
+            filled_qty = verdict.get("filled_qty") or lot_size
+            position_id = verdict.get("position_id")
+            status = "partial" if verdict["status"] == "partial" else "active"
+
+            trade = Trade(
+                instrument=instrument,
+                side=side,
+                entry_price=fill_price,
+                lot_size=filled_qty,
+                stop_loss_price=stop_loss,
+                tp1_price=tp1,
+                tp2_price=tp2,
+                order_id=str(order_id),
+                position_id=str(position_id) if position_id else None,
+                status=status,
+                entry_time=datetime.now(timezone.utc).isoformat(),
+            )
+            self.trades_today.append(trade)
+            self._persist()
+            logger.info(
+                "EXECUTED %s %s @ %.2f (%s qty=%.4f) | SL: %.2f | TP1: %.2f | TP2: %.2f",
+                side.upper(), instrument, fill_price, status, filled_qty, stop_loss, tp1, tp2,
+            )
+            return trade
         except Exception as e:
             logger.error(f"Trade execution error: {e}")
             return None
+
+    def _verify_fill(self, order_id, expected_qty: float) -> dict:
+        """Poll the broker until the order reaches a terminal state or the timeout elapses.
+        Returns a dict with `status` in {filled, partial, rejected, unknown} plus
+        fill_price/filled_qty/position_id when available.
+
+        TradeLocker SDK surface varies; we try common method names defensively and
+        fall back to an open-positions sweep if no order-state API is exposed.
+        """
+        s = self.config.strategy
+        deadline = time.monotonic() + s.fill_timeout_seconds
+
+        order_state_fns = [
+            ("get_order_state", lambda: self.tl.get_order_state(order_id)),
+            ("get_order", lambda: self.tl.get_order(order_id)),
+            ("get_order_by_id", lambda: self.tl.get_order_by_id(order_id)),
+        ]
+        position_lookup_fns = [
+            ("get_position_id_from_order_id", lambda: self.tl.get_position_id_from_order_id(order_id)),
+        ]
+        rejected_states = {"rejected", "cancelled", "canceled", "expired", "failed"}
+        filled_states = {"filled", "executed", "complete", "completed", "closed"}
+        partial_states = {"partial", "partially_filled", "partial_fill"}
+
+        last_seen: dict = {}
+        while time.monotonic() < deadline:
+            # Try direct order-state lookup
+            for name, call in order_state_fns:
+                if not hasattr(self.tl, name):
+                    continue
+                try:
+                    state = call() or {}
+                    last_seen = state if isinstance(state, dict) else {"raw": state}
+                    status = str(last_seen.get("status", last_seen.get("state", ""))).lower()
+                    filled_qty = float(last_seen.get("filledQty", last_seen.get("filled_qty", 0)) or 0)
+                    fill_price = last_seen.get("avgPrice", last_seen.get("avg_price", last_seen.get("price")))
+                    position_id = last_seen.get("positionId", last_seen.get("position_id"))
+                    if status in rejected_states:
+                        return {"status": "rejected", "reason": last_seen.get("reason") or status}
+                    if status in filled_states or (filled_qty and filled_qty >= expected_qty * 0.999):
+                        return {
+                            "status": "filled",
+                            "fill_price": float(fill_price) if fill_price is not None else None,
+                            "filled_qty": filled_qty or expected_qty,
+                            "position_id": position_id,
+                        }
+                    if status in partial_states or (0 < filled_qty < expected_qty * 0.999):
+                        # Keep polling — partial might fully fill before deadline
+                        last_seen["_partial_snapshot"] = {
+                            "fill_price": float(fill_price) if fill_price is not None else None,
+                            "filled_qty": filled_qty,
+                            "position_id": position_id,
+                        }
+                except Exception:
+                    pass  # try next probe
+                break  # only call one order-state fn per cycle
+
+            # Fallback: position lookup (filled orders typically yield a position id)
+            for name, call in position_lookup_fns:
+                if not hasattr(self.tl, name):
+                    continue
+                try:
+                    pid = call()
+                    if pid:
+                        return {"status": "filled", "position_id": pid, "filled_qty": expected_qty}
+                except Exception:
+                    pass
+                break
+
+            time.sleep(s.fill_poll_seconds)
+
+        # Timeout — return partial snapshot if we have one, else unknown
+        snap = last_seen.get("_partial_snapshot")
+        if snap:
+            return {"status": "partial", **snap}
+        return {"status": "unknown", "raw": last_seen}
 
     def calculate_stop_loss(self, instrument: str, side: str, entry_price: float) -> float:
         """Calculate stop loss price based on fixed $20 risk."""
@@ -487,40 +671,41 @@ class TradingBot:
 
     def _is_in_session(self) -> bool:
         """Check if current time is within the tradable session.
-        Active 23 hours per day: London+NY (3 AM–4 PM ET) + overnight/Asia (4 PM–3 AM ET).
-        Off only during 3 AM–4 AM ET (daily reset window).
+        Off-window is configurable (default 3–4 AM ET). Uses zoneinfo so DST is handled
+        automatically — no more EDT/EST drift.
         """
-        now_utc = datetime.now(timezone.utc)
-        # ET = UTC-4 (EDT) — simplified; swap to UTC-5 in winter if needed
-        et_hour = (now_utc.hour - 4) % 24
-        # Off-window: 3 AM to 4 AM ET only
-        return not (3 <= et_hour < 4)
+        et_hour = datetime.now(ET).hour
+        s = self.config.strategy
+        return not (s.session_off_start_hour_et <= et_hour < s.session_off_end_hour_et)
 
     def _run_loop(self):
-        """Main loop — scans every 60 seconds."""
+        """Main loop — scans every `strategy.scan_interval_seconds` seconds."""
+        scan_interval = self.config.strategy.scan_interval_seconds
         while self.running:
             try:
+                self.trade_manager.maybe_roll_day()
+
                 if not self._is_in_session():
-                    logger.info("Outside trading session — sleeping 60s")
-                    time.sleep(60)
+                    logger.info("Outside trading session — sleeping %ds", scan_interval)
+                    time.sleep(scan_interval)
                     continue
 
                 if len(self.trade_manager.trades_today) >= self.config.max_trades_per_day:
-                    logger.info("Max trades reached for today — sleeping 300s")
-                    time.sleep(300)
+                    logger.info("Max trades reached for today — sleeping %ds", scan_interval * 5)
+                    time.sleep(scan_interval * 5)
                     continue
 
                 for instrument in self.config.instruments:
                     self._scan_instrument(instrument)
 
-                time.sleep(60)  # Scan every 60 seconds
+                time.sleep(scan_interval)
 
             except KeyboardInterrupt:
                 self.stop()
                 break
             except Exception as e:
                 logger.error(f"Loop error: {e}")
-                time.sleep(30)
+                time.sleep(max(30, scan_interval // 2))
 
     def _scan_instrument(self, instrument: str):
         """Run full MTF scan on a single instrument."""
